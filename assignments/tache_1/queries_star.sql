@@ -1,18 +1,6 @@
--- ============================================================================
--- exercices flash : fenetres (window functions) & ctes — version star schema (dw)
--- base de donnees : f1 (schema dw : 1 table de faits + 5 dimensions)
--- style : tout en minuscules, une clause par ligne pour faciliter la lecture
--- ============================================================================
+-- tache 1 : fenetres & ctes (star schema dw)
 
-
--- ============================================================================
--- exercice 1 : top 3 des pilotes par ecurie selon le total de points
--- (jointures directes 1-hop depuis dw.fact_race_results)
--- ============================================================================
--- etape 1 (cte 1) : calculer le total de points de chaque pilote par ecurie
--- etape 2 (cte 2) : classer les pilotes de 1 a n dans chaque ecurie (row_number)
--- etape 3         : garder seulement les rangs 1, 2 et 3
-
+-- 1. top 3 des pilotes par ecurie selon le total de points
 with driver_constructor_pts as (
     select
         c.constructor_name,
@@ -50,15 +38,7 @@ order by
     constructor_name,
     rnk;
 
-
--- ============================================================================
--- exercice 2 : evolution des points mensuels en % par rapport au mois precedent
--- (utilise dw.dim_date directement)
--- ============================================================================
--- etape 1 (cte 1) : regrouper les points par mois (date_trunc sur full_date)
--- etape 2 (cte 2) : recuperer les points du mois precedent avec lag()
--- etape 3         : calculer le % d'evolution (nullif evite la division par 0)
-
+-- 2. evolution des points mensuels en % par rapport au mois precedent
 with monthly_pts as (
     select
         date_trunc('month', dt.full_date)::date as race_month,
@@ -90,14 +70,7 @@ from with_prev
 order by
     race_month desc;
 
-
--- ============================================================================
--- exercice 3 : segmenter les pilotes en 4 quartiles selon leurs points totaux
--- ============================================================================
--- etape 1 (cte) : calculer le total de points en carriere de chaque pilote
--- etape 2       : couper la liste en 4 groupes egaux avec ntile(4)
---                 (1 = top 25% des pilotes, 4 = derniers 25%)
-
+-- 3. segmenter les pilotes en 4 quartiles selon leurs points totaux
 with driver_totals as (
     select
         d.driver_key,
@@ -122,34 +95,20 @@ order by
     quartile,
     total_points desc;
 
-
--- ============================================================================
--- exercice 4 : afficher le chemin complet de chaque circuit (cte recursive)
--- (utilise la hierarchie pays > ville > circuit dans dw.dim_circuit)
--- ============================================================================
--- etape 1 (nodes)    : construire l'arbre parent -> enfant
--- etape 2 (geo_tree) : parcourir l'arbre recursivement pour coller le chemin
-
+-- 4. chemin complet de chaque circuit (pays > ville > circuit) via cte recursive
 with recursive nodes as (
-    -- niveau 1 : les pays (pas de parent)
     select distinct
         country as id,
         null::text as parent_id,
         country as label
     from dw.dim_circuit
-
     union
-
-    -- niveau 2 : les villes (parent = pays)
     select distinct
         country || ':' || city as id,
         country as parent_id,
         city as label
     from dw.dim_circuit
-
     union
-
-    -- niveau 3 : les circuits (parent = pays:ville)
     select
         circuit_key::text as id,
         country || ':' || city as parent_id,
@@ -157,7 +116,6 @@ with recursive nodes as (
     from dw.dim_circuit
 ),
 geo_tree as (
-    -- point de depart : les racines (pays)
     select
         id,
         label,
@@ -165,10 +123,7 @@ geo_tree as (
         1 as lvl
     from nodes
     where parent_id is null
-
     union all
-
-    -- partie recursive : on descend d'un niveau a chaque tour
     select
         n.id,
         n.label,
@@ -186,14 +141,7 @@ from geo_tree
 order by
     full_path;
 
-
--- ============================================================================
--- exercice 5 : delai moyen (en jours) entre deux courses d'un meme pilote
--- ============================================================================
--- etape 1 (cte) : pour chaque course d'un pilote, trouver la date de sa course
---                 precedente avec lag()
--- etape 2       : calculer la moyenne de (full_date - prev_race_date)
-
+-- 5. delai moyen en jours entre deux courses consecutives d'un meme pilote
 with driver_races as (
     select
         d.driver_key,
@@ -222,17 +170,7 @@ group by
 order by
     total_races desc;
 
-
--- ============================================================================
--- exercice 6 (bonus star schema) : kpis par decennie et categorie d'abandon
--- (montre la puissance des kpis pre-calcules dans dw.fact_race_results +
---  dw.dim_date + dw.dim_status + dw.dim_circuit en jointures directes)
--- ============================================================================
--- etape 1 (cte) : calculer le nombre de departs, victoires, podiums, abandons
---                 et taux d'abandon (%) par decennie et categorie de statut
--- etape 2       : calculer la part (%) de chaque categorie dans sa decennie
---                 avec sum() over (partition by decade)
-
+-- 6. part (%) des statuts d'arrivee par decennie (kpis star schema)
 with decade_status as (
     select
         dt.decade,

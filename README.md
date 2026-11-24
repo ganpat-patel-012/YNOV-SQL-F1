@@ -20,9 +20,11 @@ YNOV-SQL-F1/
 │   └── f1.dump                   # Portable compressed PostgreSQL dump (6.2 MB)
 ├── sql/
 │   ├── schema.sql                # Full PostgreSQL DDL (tables, PKs, FKs, indexes)
-│   ├── star_schema.sql           # Star Schema ELT script (public -> dw: 1 fact + 5 dims)
-│   ├── queries.sql               # Window functions & CTEs exercises on public schema
-│   └── star_queries.sql          # 6 Window functions & CTEs exercises on dw Star Schema
+│   └── star_schema.sql           # Star Schema ELT script (public -> dw: 1 fact + 5 dims)
+├── assignments/
+│   └── tache_1/
+│       ├── queries_public.sql    # Tache 1: Window functions & CTEs on public schema
+│       └── queries_star.sql      # Tache 1: Window functions & CTEs on dw Star Schema
 ├── docs/
 │   ├── f1_er_diagram.drawio      # Editable Draw.io ER diagram (14 tables, 23 FKs)
 │   ├── f1_star_schema.drawio     # Editable Draw.io Star Schema diagram (1 fact, 5 dims)
