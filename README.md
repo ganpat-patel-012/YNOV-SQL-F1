@@ -20,6 +20,7 @@ YNOV-SQL-F1/
 │   └── f1.dump                   # Portable compressed PostgreSQL dump (6.2 MB)
 ├── sql/
 │   ├── schema.sql                # Full PostgreSQL DDL (tables, PKs, FKs, indexes)
+│   ├── star_schema.sql           # Star Schema ELT script (public -> dw: 1 fact + 5 dims)
 │   └── queries.sql               # Window functions & CTEs exercises (beginner-friendly, lowercase)
 ├── docs/
 │   ├── f1_er_diagram.drawio      # Editable Draw.io ER diagram (14 tables, 23 FKs)
