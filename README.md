@@ -20,7 +20,7 @@ YNOV-SQL-F1/
 │   └── f1.dump                   # Portable compressed PostgreSQL dump (6.2 MB)
 ├── sql/
 │   ├── schema.sql                # Full PostgreSQL DDL (tables, PKs, FKs, indexes)
-│   └── queries.sql               # Window functions & CTEs exercises (single-line lowercase)
+│   └── queries.sql               # Window functions & CTEs exercises (beginner-friendly, lowercase)
 ├── docs/
 │   ├── f1_er_diagram.drawio      # Editable Draw.io ER diagram (14 tables, 23 FKs)
 │   ├── validation_report.md      # Verification against all 6 course criteria + row parity
