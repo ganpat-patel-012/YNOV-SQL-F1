@@ -23,6 +23,7 @@ YNOV-SQL-F1/
 │   └── queries.sql               # Window functions & CTEs exercises (beginner-friendly, lowercase)
 ├── docs/
 │   ├── f1_er_diagram.drawio      # Editable Draw.io ER diagram (14 tables, 23 FKs)
+│   ├── f1_star_schema.drawio     # Editable Draw.io Star Schema diagram (1 fact, 5 dims)
 │   ├── validation_report.md      # Verification against all 6 course criteria + row parity
 │   └── db_choices_defense.md     # Architectural defense & Q&A prep for database choices
 ```
@@ -72,7 +73,8 @@ pg_restore -d f1 --no-owner --no-privileges dump/f1.dump
 
 ## Documentation
 
-- **[ER Diagram (Draw.io)](docs/f1_er_diagram.drawio)** — Full visual schema with all 14 tables, column types, `PK`/`FK` badges, and 23 crow's-foot relationships ([Open directly in draw.io](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fganpat-patel-012%2FYNOV-SQL-F1%2Fmain%2Fdocs%2Ff1_er_diagram.drawio)).
+- **[ER Diagram — Snowflake / 3NF (Draw.io)](docs/f1_er_diagram.drawio)** — Full visual schema with all 14 tables, column types, `PK`/`FK` badges, and 23 crow's-foot relationships ([Open directly in draw.io](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fganpat-patel-012%2FYNOV-SQL-F1%2Fmain%2Fdocs%2Ff1_er_diagram.drawio)).
+- **[Star Schema ER Diagram (Draw.io)](docs/f1_star_schema.drawio)** — Analytics/BI Star Schema with 1 central fact table (`fact_race_results`) and 5 denormalized dimensions ([Open directly in draw.io](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fganpat-patel-012%2FYNOV-SQL-F1%2Fmain%2Fdocs%2Ff1_star_schema.drawio)).
 - **[Validation Report](docs/validation_report.md)** — Proof that all 6 course criteria (*Les critères d'une base valide*) and 100% CSV-to-DB row parity are satisfied.
 - **[Database Choices Defense](docs/db_choices_defense.md)** — Justification of dataset selection, PostgreSQL engine, 3NF schema modeling, data typing, indexing strategy, data quirks, and anticipated Q&A for project defense.
 
