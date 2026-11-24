@@ -20,11 +20,10 @@ YNOV-SQL-F1/
 │   └── f1.dump                   # Portable compressed PostgreSQL dump (6.2 MB)
 ├── sql/
 │   └── schema.sql                # Full PostgreSQL DDL (tables, PKs, FKs, indexes)
-├── scripts/
-│   └── load_f1_db.py             # Reproducible Python loader (PostgreSQL COPY)
-└── docs/
-    ├── validation_report.md      # Verification against all 6 course criteria + row parity
-    └── db_choices_defense.md     # Architectural defense & Q&A prep for database choices
+├── docs/
+│   ├── f1_er_diagram.drawio      # Editable Draw.io ER diagram (14 tables, 23 FKs)
+│   ├── validation_report.md      # Verification against all 6 course criteria + row parity
+│   └── db_choices_defense.md     # Architectural defense & Q&A prep for database choices
 ```
 
 ---
@@ -40,17 +39,7 @@ pg_restore -d f1 --no-owner --no-privileges dump/f1.dump
 
 *(Add `-U postgres` or `-p <port>` if your local PostgreSQL uses a non-default user or port.)*
 
-### Option 2: Load from CSVs with Python
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install psycopg2-binary kagglehub
-.venv/bin/python3 scripts/load_f1_db.py --db f1 --port 5432 --user postgres
-```
-
-*(By default, `load_f1_db.py` loads directly from `data/csv/`. Pass `--from-kaggle` to download the latest version via `kagglehub`.)*
-
-### Option 3: Restore via pgAdmin 4
+### Option 2: Restore via pgAdmin 4
 
 1. Create an empty database named `f1`.
 2. Right-click **`f1`** → **Restore...**
@@ -82,6 +71,7 @@ python3 -m venv .venv
 
 ## Documentation
 
+- **[ER Diagram (Draw.io)](docs/f1_er_diagram.drawio)** — Full visual schema with all 14 tables, column types, `PK`/`FK` badges, and 23 crow's-foot relationships ([Open directly in draw.io](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fganpat-patel-012%2FYNOV-SQL-F1%2Fmain%2Fdocs%2Ff1_er_diagram.drawio)).
 - **[Validation Report](docs/validation_report.md)** — Proof that all 6 course criteria (*Les critères d'une base valide*) and 100% CSV-to-DB row parity are satisfied.
 - **[Database Choices Defense](docs/db_choices_defense.md)** — Justification of dataset selection, PostgreSQL engine, 3NF schema modeling, data typing, indexing strategy, data quirks, and anticipated Q&A for project defense.
 
