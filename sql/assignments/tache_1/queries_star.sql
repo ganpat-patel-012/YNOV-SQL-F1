@@ -1,5 +1,3 @@
--- tache 1 : fenetres & ctes (star schema dw)
-
 -- 1. top 3 des pilotes par ecurie selon le total de points
 with driver_constructor_pts as (
     select

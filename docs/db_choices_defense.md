@@ -94,7 +94,7 @@ Being transparent about real-world data gaps shows strong data engineering rigor
 *A:* At 589,081 rows (~34 MB table data), PostgreSQL handles `lap_times` comfortably in memory with B-Tree indexes. Partitioning by `race_id` or `year` would add operational complexity without meaningful speedups at <1M rows — though it is a natural next step if we later ingest high-frequency car telemetry (e.g. FastF1 10Hz sensor data).
 
 **Q: Why use `pg_dump -Fc` instead of just committing CSVs?**  
-*A:* We provide **both**: `data/csv/` gives full transparency and reproducibility for ETL pipelines (`scripts/load_f1_db.py`), while `dump/f1.dump` lets anyone restore the exact typed schema, constraints, indexes, and 701,433 rows in a single `pg_restore` command without needing Python.
+*A:* We provide **both**: `data/csv/` gives full transparency into the source data, while `dump/f1.dump` lets anyone restore the exact typed schema, constraints, indexes, and 701,433 rows in a single `pg_restore` command.
 
 **Q: What interesting analytical SQL queries can this database answer?**  
 - **Driver dominance & consistency:** Win rate, podium rate, DNF rate by era (`GROUP BY` + `CASE`)

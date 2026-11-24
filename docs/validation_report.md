@@ -101,10 +101,12 @@ Verified multi-table joins (`results` ⋈ `drivers`, top 5 Grand Prix race winne
 | File | Purpose | Size |
 | :--- | :--- | ---: |
 | `sql/schema.sql` | Full PostgreSQL DDL (14 tables, 14 PKs, 23 FKs, 13 analytical indexes) | — |
-| `scripts/load_f1_db.py` | Reproducible Python script (loads from `data/csv/` or `kagglehub` via PostgreSQL `COPY`) | — |
 | `dump/f1.dump` | Portable compressed `pg_dump` archive (`--no-owner --no-privileges`, verified all 14 tables) | 6.2 MB |
 
-### Restore Command (for sharing)
+### Supported Restore Method
+
+Restore the prebuilt PostgreSQL archive; the CSV files are retained as source data.
+
 ```bash
 createdb f1
 pg_restore -d f1 --no-owner --no-privileges dump/f1.dump
