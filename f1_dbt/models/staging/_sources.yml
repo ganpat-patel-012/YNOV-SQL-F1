@@ -1,0 +1,106 @@
+version: 2
+
+sources:
+  - name: f1                    # nom logique
+    schema: public              # schéma réel des tables brutes
+    description: "Données brutes Formula 1 World Championship 1950–2024 (Ergast / Kaggle), modèle 3NF"
+    tables:
+      - name: seasons
+        description: "Une saison de championnat par ligne"
+        columns:
+          - name: year
+            tests: [unique, not_null]
+
+      - name: circuits
+        description: "Un circuit par ligne"
+        columns:
+          - name: circuit_id
+            tests: [unique, not_null]
+
+      - name: constructors
+        description: "Une écurie (constructeur) par ligne"
+        columns:
+          - name: constructor_id
+            tests: [unique, not_null]
+
+      - name: drivers
+        description: "Un pilote par ligne"
+        columns:
+          - name: driver_id
+            tests: [unique, not_null]
+
+      - name: status
+        description: "Un statut d'arrivée (Finished, +1 Lap, Accident…) par ligne"
+        columns:
+          - name: status_id
+            tests: [unique, not_null]
+
+      - name: races
+        description: "Un Grand Prix par ligne"
+        columns:
+          - name: race_id
+            tests: [unique, not_null]
+
+      - name: results
+        description: "Un résultat de course par ligne : un pilote dans un Grand Prix"
+        columns:
+          - name: result_id
+            tests: [unique, not_null]
+
+      - name: sprint_results
+        description: "Un résultat de course sprint par ligne : un pilote dans un sprint"
+        columns:
+          - name: result_id
+            tests: [unique, not_null]
+
+      - name: qualifying
+        description: "Un résultat de qualification par ligne : un pilote dans une séance de qualification"
+        columns:
+          - name: qualify_id
+            tests: [unique, not_null]
+
+      - name: lap_times
+        description: "Un tour par ligne : un pilote, une course, un numéro de tour"
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [race_id, driver_id, lap]
+        columns:
+          - name: race_id
+            tests: [not_null]
+          - name: driver_id
+            tests: [not_null]
+          - name: lap
+            tests: [not_null]
+
+      - name: pit_stops
+        description: "Un arrêt aux stands par ligne : un pilote, une course, un numéro d'arrêt"
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [race_id, driver_id, stop]
+        columns:
+          - name: race_id
+            tests: [not_null]
+          - name: driver_id
+            tests: [not_null]
+          - name: stop
+            tests: [not_null]
+
+      - name: driver_standings
+        description: "Classement championnat pilotes après chaque course"
+        columns:
+          - name: driver_standings_id
+            tests: [unique, not_null]
+
+      - name: constructor_standings
+        description: "Classement championnat constructeurs après chaque course"
+        columns:
+          - name: constructor_standings_id
+            tests: [unique, not_null]
+
+      - name: constructor_results
+        description: "Points d'une écurie dans un Grand Prix"
+        columns:
+          - name: constructor_results_id
+            tests: [unique, not_null]
