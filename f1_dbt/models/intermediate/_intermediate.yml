@@ -1,0 +1,104 @@
+version: 2
+
+models:
+  - name: int_pit_stops_per_driver_race
+    description: >
+      Arrêts aux stands agrégés par pilote et par Grand Prix (données depuis 2011).
+      Agrégés avant la jointure pour ne pas dupliquer les résultats.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [race_id, driver_id]
+    columns:
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: pit_stop_count
+        description: "Nombre d'arrêts aux stands du pilote dans la course"
+        tests: [not_null]
+      - name: total_pit_milliseconds
+        description: "Durée totale des arrêts aux stands, en millisecondes"
+
+  - name: int_race_results_enriched
+    description: >
+      Une ligne par résultat (un pilote dans un Grand Prix), même nombre de lignes que stg_f1__results.
+      Résultats joints au Grand Prix (saison, date, circuit) et aux arrêts aux stands agrégés,
+      enrichis des indicateurs de course (positions gagnées, victoire, podium, non classé, points).
+    columns:
+      - name: result_id
+        description: "Identifiant du résultat (clé du grain) : unique après les jointures"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: status_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__status')
+                field: status_id
+      - name: circuit_id
+        description: "Circuit du Grand Prix (issu de la jointure avec stg_f1__races)"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__circuits')
+                field: circuit_id
+      - name: season_year
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__seasons')
+                field: season_year
+      - name: date_race
+        description: "Date du Grand Prix"
+        tests: [not_null]
+      - name: positions_gained
+        description: "Position de départ − position finale (vide si départ des stands, grille = 0)"
+      - name: is_winner
+        description: "Vrai si le pilote a gagné la course"
+        tests: [not_null]
+      - name: is_podium
+        description: "Vrai si le pilote a fini dans les 3 premiers"
+        tests: [not_null]
+      - name: is_not_classified
+        description: "Vrai si le pilote n'est pas classé (abandon, disqualification…)"
+        tests: [not_null]
+      - name: has_scored_points
+        description: "Vrai si le pilote a marqué des points"
+        tests: [not_null]
+      - name: pit_stop_count
+        description: "Nombre d'arrêts aux stands (0 si pas de donnée, avant 2011)"
+        tests: [not_null]
