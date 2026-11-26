@@ -5,12 +5,12 @@ Projet SQL et data engineering de bout en bout, construit sur le jeu de données
 | Étape | Ce que nous avons construit | Où |
 | :--- | :--- | :--- |
 | 1. Base relationnelle | 14 tables normalisées (3FN), 23 clés étrangères, 701 433 lignes, schéma en étoile construit à la main | [`sql/Other SQL/`](sql/Other%20SQL/), [`dump/`](dump/), [`docs/`](docs/) |
-| 2. Tâche 1 — SQL avancé | 6 questions métier avec fonctions de fenêtrage, CTE récursive, CTE enchaînées, sur les deux modèles | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
-| 3. Tâche 2 — Performance | Données multipliées par 50 (1,46 M de lignes), `EXPLAIN ANALYZE` avant/après, 3 index, jusqu'à **441×** plus rapide | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
+| 2. Tâche 1 — SQL avancé | 7 questions métier avec classement, LAG, NTILE, fenêtres glissantes (`ROWS BETWEEN`), CTE récursive, CTE enchaînées, sur les deux modèles | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
+| 3. Tâche 2 — Performance | Données multipliées par 50 (1,46 M de lignes), `EXPLAIN ANALYZE` avant/après (médiane de 3 exécutions), 4 index, jusqu'à **×387** plus rapide | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
 | 4. Pipeline dbt | sources → staging → intermediate → marts, 385 vérifications réussies, documentation générée | [`f1_dbt/`](f1_dbt/) |
 | 5. Schéma en étoile | Étoile dbt dans le schéma `dw_star` : 1 table de faits + 5 dimensions (mêmes colonnes que le `dw` construit à la main), 3 questions métier | [`docs/schema_etoile.png`](docs/schema_etoile.png), [`sql/assignments/tache_3/`](sql/assignments/tache_3/) |
 
-**Stack :** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Python 3.13 · Git
+**Stack :** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Metabase · Python 3.13 · Git
 **Licence :** CC0 domaine public ([Kaggle / Ergast F1](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020))
 
 ---
@@ -60,8 +60,9 @@ Les mêmes questions métier sont traitées sur le modèle 3FN ([`queries_non_st
 | 4 | Chemin complet de chaque circuit (pays > ville > circuit) | `WITH RECURSIVE` |
 | 5 | Nombre moyen de jours entre deux courses consécutives d'un pilote | `LAG` + `PARTITION BY` |
 | 6 | Part (%) des statuts d'arrivée par décennie (schéma en étoile) | `SUM() OVER (PARTITION BY decade)` + CTE |
+| 7 | Cumul des points et moyenne mobile sur 3 courses, top 3 des pilotes de 2023 | `SUM() OVER (… ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, `AVG() OVER (… ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)` |
 
-Rédactions : [les 6 requêtes expliquées avec leurs résultats](sql/assignments/tache_1/tache_1_cte_queries.md) · [Conception du schéma en étoile : grain, dimension temporelle, transformations, comparaison des modèles](sql/assignments/tache_1/star_schema.md)
+Rédactions : [les 7 requêtes expliquées avec leurs résultats](sql/assignments/tache_1/tache_1_cte_queries.md) · [Conception du schéma en étoile : grain, dimension temporelle, transformations, comparaison des modèles](sql/assignments/tache_1/star_schema.md)
 
 ---
 
@@ -70,16 +71,17 @@ Rédactions : [les 6 requêtes expliquées avec leurs résultats](sql/assignment
 Script : [`tache_2_indexing_benchmark.sql`](sql/assignments/tache_2/tache_2_indexing_benchmark.sql) · Rapport : [`benchmark_results.md`](sql/assignments/tache_2/benchmark_results.md)
 
 - **Montée en volume :** le schéma en étoile est copié **×50** dans un schéma `benchmark` séparé avec `CROSS JOIN generate_series(1, 50)` (`public` et `dw` ne sont pas modifiés). Les clés sont décalées (`key + (copy_num - 1) * 100000`), donc chaque clé primaire et étrangère reste unique et les jointures ne dupliquent aucune ligne : **1 458 650 lignes** (~208 Mo), dont 1 337 950 dans la table de faits.
-- **Index :** clés primaires sur les 6 tables, un B-Tree simple sur `driver_key`, un B-Tree composite sur `(constructor_key, circuit_key)` et un B-Tree partiel sur `driver_key WHERE is_win = 1` (512 ko).
-- **Résultats** (`EXPLAIN (ANALYZE, BUFFERS)`) :
+- **Index :** clés primaires sur les 6 tables, un B-Tree simple sur `driver_key`, un B-Tree composite sur `(constructor_key, circuit_key)`, un B-Tree partiel sur `driver_key WHERE is_win = 1` (512 ko) et un B-Tree couvrant `(constructor_key) INCLUDE (driver_key, date_key, points)` pour la requête avec fonction de fenêtrage.
+- **Résultats** (`EXPLAIN (ANALYZE, BUFFERS)`, médiane de 3 exécutions, avant = sans index) :
 
-| Requête | Avant (sans index) | Après (avec index) | Gain |
-| :--- | :--- | :--- | :---: |
-| A. Trouver un pilote précis (`fact ⋈ driver ⋈ constructor`) | 247,31 ms · 18 814 buffers | 7,55 ms · 203 buffers | **32,7×** |
-| B. Trouver une écurie sur un circuit (`fact ⋈ driver`) | 498,69 ms · 109 810 buffers | 12,64 ms · 701 buffers | **39,5×** |
-| C. Compter les victoires d'un pilote (`fact ⋈ date ⋈ circuit`) | 279,41 ms · 20 800 buffers | 0,63 ms · 697 buffers | **441×** |
+| Requête | Avant | Opérateur avant | Après | Opérateur après | Gain |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| A. Trouver un pilote précis (`fact ⋈ driver ⋈ constructor`) | 33,45 ms · 19 334 buffers | Seq Scan | 1,85 ms · 252 buffers | Index Scan | **×18,1** |
+| B. Trouver une écurie sur un circuit (`fact ⋈ driver`) | 228,21 ms · 109 813 buffers | Seq Scan | 0,59 ms · 707 buffers | Index Scan | **×386,8** |
+| C. Compter les victoires d'un pilote (`fact ⋈ date ⋈ circuit`) | 61,49 ms · 25 728 buffers | Seq Scan | 0,25 ms · 697 buffers | Index Scan (partiel) | **×246,0** |
+| D. Fonction de fenêtrage : `RANK() OVER (PARTITION BY year …)` des pilotes d'une écurie | 59,45 ms · 21 916 buffers | Seq Scan | 14,57 ms · 1 542 buffers | Index Only Scan (couvrant) | **×4,1** |
 
-Les index remplacent les `Parallel Seq Scan` par des parcours d'index et réduisent les lectures de buffers de 96 à 99 % ; l'index partiel apporte le plus gros gain pour la plus petite taille.
+Les index remplacent le parcours complet de la table de faits (1,34 M de lignes) et réduisent les lectures de buffers de 93 à 99 %. L'index partiel apporte un gros gain pour seulement 512 ko. La requête avec fonction de fenêtrage gagne moins : l'index supprime le parcours complet, mais la jointure, l'agrégation et le tri nécessaires au `RANK()` restent. Méthode complète, exécutions détaillées et limites : [`benchmark_results.md`](sql/assignments/tache_2/benchmark_results.md).
 
 ---
 
@@ -100,7 +102,7 @@ sources (public.*)  ->  staging (stg_)  ->  intermediate (int_)   ->  marts (dim
 | Staging | `view` | 14 modèles `stg_f1__<table>` : renommage (`date` → `date_race`, `grid` → `grid_position`…), typage (points → numeric, coordonnées → `numeric(9,6)`), nettoyage (trim, upper), `position_text` transformé en code `classification_status`. Ni jointure, ni agrégation. |
 | Intermediate | `ephemeral` | `int_race_results_enriched` (résultats + courses + arrêts aux stands + temps au tour, avec positions gagnées, vainqueur, podium, non classé, points marqués, tours en tête), `int_pit_stops_per_driver_race`, `int_lap_times_per_driver_race`, `int_qualifying_vs_race`, `int_sprint_results_enriched`, `int_driver_season_standings`, `int_constructor_season_standings`, `int_constructor_race_results` |
 | Marts — `star/` | `table` (schéma `dw_star`) | Le schéma en étoile : `fact_race_results` + `dim_date`, `dim_driver`, `dim_constructor`, `dim_circuit`, `dim_status` (voir section 5) |
-| Marts — `analytics/` | `table` (schéma `dw`) | Dimensions : `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`, `dim_date` (table `dim_calendar`, une ligne par jour). Faits : `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Tables agrégées : `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
+| Marts — `analytics/` | `table` (schéma `dw`) | Dimensions : `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`, `dim_date` (table `dim_calendar`, une ligne par jour). Faits : `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Tables agrégées : `fct_driver_season`, `fct_constructor_season`, `fct_circuit_stats`, `fct_pit_stop_strategy`, `fct_teammate_head_to_head` |
 
 Chaque modèle a une description ; chaque mart indique son **grain** (ce que représente une ligne) dans un commentaire et dans sa description.
 
@@ -135,6 +137,10 @@ Conçu sur papier avec les 4 étapes de Kimball, validé en cours, puis construi
 | 1 | Quelle écurie a dominé chaque décennie (victoires) ? | Ferrari (années 1950), Lotus-Climax (années 1960), Ferrari (années 1970), McLaren (années 1980), Williams (années 1990), Ferrari (années 2000), Mercedes (années 2010), Red Bull (années 2020) |
 | 2 | Sur quels circuits la pole position est-elle la plus décisive (depuis 2000) ? | Barcelone (72 % des victoires depuis la pole), Yas Marina (68,8 %), Marina Bay et Suzuka (66,7 %) |
 | 3 | Meilleurs marqueurs de l'ère hybride (2014–2024), et combien de courses perdues sur casse mécanique ? | Hamilton 3 718,5 pts / 148 podiums / 8 abandons mécaniques, Verstappen 2 912,5 / 112 / 19, Bottas 1 784 / 67 / 18 |
+
+**Tableau de bord Metabase** — les 3 questions sur l'étoile, connecté au schéma `dw_star` (Metabase tourne en local sur `localhost:3000`) :
+
+![Tableau de bord Metabase](docs/metabase_dashboard.png)
 
 ---
 
@@ -187,7 +193,7 @@ Sélections utiles : `dbt build -s staging` (une couche), `dbt run -s stg_f1__dr
 YNOV-SQL-F1/
 ├── README.md
 ├── data/csv/                          # 14 fichiers CSV sources bruts (21 Mo)
-├── dump/f1.dump                       # Dump PostgreSQL compressé (schémas public + dw)
+├── dump/f1.dump                       # Dump PostgreSQL compressé (schémas public + dw + dw_star)
 ├── sql/
 │   ├── Other SQL/
 │   │   ├── public.sql                 # DDL 3FN : tables, clés primaires, clés étrangères, index
@@ -210,7 +216,8 @@ YNOV-SQL-F1/
     ├── f1_without_star_schema.drawio  # Diagramme ER 3FN (14 tables, 23 clés étrangères)
     ├── f1_star_schema.drawio          # Diagramme du schéma en étoile (1 fait, 5 dims)
     ├── Star.png  Without Star.png     # Exports PNG
-    ├── schema_etoile.png              # Schéma en étoile dbt (3 faits, 5 dimensions)
+    ├── schema_etoile.png              # Schéma en étoile dbt (1 fait, 5 dimensions)
+    ├── metabase_dashboard.png         # Tableau de bord Metabase sur l'étoile (3 questions métier)
     ├── validation_report.md           # 6 critères du cours + correspondance des lignes
     └── db_choices_defense.md          # Choix de conception et préparation aux questions
 ```

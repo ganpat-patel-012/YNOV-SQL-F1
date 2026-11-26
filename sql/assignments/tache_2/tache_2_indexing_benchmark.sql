@@ -84,6 +84,21 @@ join benchmark.dim_date dt on dt.date_key = f.date_key
 join benchmark.dim_circuit ci on ci.circuit_key = f.circuit_key
 where f.is_win = 1 and f.driver_key = 1;
 
+explain (analyze, buffers)
+-- d. fonction de fenetre : classement des pilotes d'une ecurie par points, saison par saison
+with saisons as (
+    select dt.year, d.full_name, sum(f.points) as points
+    from benchmark.fact_race_results f
+    join benchmark.dim_date dt on dt.date_key = f.date_key
+    join benchmark.dim_driver d on d.driver_key = f.driver_key
+    where f.constructor_key = 6
+    group by dt.year, d.full_name
+)
+select year, full_name, points,
+       rank() over (partition by year order by points desc) as rang_ecurie
+from saisons
+order by year, rang_ecurie;
+
 -- 3. indexing (primary keys + targeted b-tree, composite & partial indexes)
 alter table benchmark.dim_date add primary key (date_key);
 alter table benchmark.dim_driver add primary key (driver_key);
@@ -95,6 +110,8 @@ alter table benchmark.fact_race_results add primary key (result_key);
 create index idx_bench_driver_key on benchmark.fact_race_results (driver_key);
 create index idx_bench_constructor_circuit on benchmark.fact_race_results (constructor_key, circuit_key);
 create index idx_bench_wins_driver on benchmark.fact_race_results (driver_key) where is_win = 1;
+-- covering index for query d (window function): index only scan on the constructor's rows
+create index idx_bench_constructor_cover on benchmark.fact_race_results (constructor_key) include (driver_key, date_key, points);
 
 analyze benchmark.dim_date;
 analyze benchmark.dim_driver;
@@ -127,6 +144,21 @@ from benchmark.fact_race_results f
 join benchmark.dim_date dt on dt.date_key = f.date_key
 join benchmark.dim_circuit ci on ci.circuit_key = f.circuit_key
 where f.is_win = 1 and f.driver_key = 1;
+
+explain (analyze, buffers)
+-- d. fonction de fenetre : classement des pilotes d'une ecurie par points, saison par saison
+with saisons as (
+    select dt.year, d.full_name, sum(f.points) as points
+    from benchmark.fact_race_results f
+    join benchmark.dim_date dt on dt.date_key = f.date_key
+    join benchmark.dim_driver d on d.driver_key = f.driver_key
+    where f.constructor_key = 6
+    group by dt.year, d.full_name
+)
+select year, full_name, points,
+       rank() over (partition by year order by points desc) as rang_ecurie
+from saisons
+order by year, rang_ecurie;
 
 -- 5. verification: row counts, sizes & index usage
 select
