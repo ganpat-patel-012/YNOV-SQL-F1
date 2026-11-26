@@ -7,7 +7,8 @@ End-to-end SQL & data engineering project built on the **Formula 1 World Champio
 | 1. Relational database | 14 normalized tables (3NF), 23 foreign keys, 701,433 rows, hand-built star schema | [`sql/Other SQL/`](sql/Other%20SQL/), [`dump/`](dump/), [`docs/`](docs/) |
 | 2. Tâche 1 — Advanced SQL | 6 business questions with window functions, recursive CTE, chained CTEs, on both models | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
 | 3. Tâche 2 — Performance | Data scaled ×50 (1.46 M rows), `EXPLAIN ANALYZE` before/after, 3 indexes, up to **441×** faster | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
-| 4. dbt pipeline | sources → staging → intermediate → marts, 306 passing checks, generated docs | [`f1_dbt/`](f1_dbt/) |
+| 4. dbt pipeline | sources → staging → intermediate → marts, 385 passing checks, generated docs | [`f1_dbt/`](f1_dbt/) |
+| 5. Star schema | dbt star in schema `dw_star`: 1 fact + 5 dimensions (same columns as the hand-built `dw`), 3 business questions | [`docs/schema_etoile.png`](docs/schema_etoile.png), [`sql/assignments/tache_3/`](sql/assignments/tache_3/) |
 
 **Stack:** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Python 3.13 · Git
 **License:** CC0 Public Domain ([Kaggle / Ergast F1](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020))
@@ -98,19 +99,42 @@ sources (public.*)  ->  staging (stg_)  ->  intermediate (int_)   ->  marts (dim
 | Sources | — | [`_sources.yml`](f1_dbt/models/staging/_sources.yml) declares the 14 `public` tables as source `f1` |
 | Staging | `view` | 14 `stg_f1__<table>` models: renaming (`date` → `date_race`, `grid` → `grid_position`…), casting (points → numeric, coordinates → `numeric(9,6)`), cleaning (trim, upper), `position_text` split into a `classification_status` code. No joins, no aggregations. |
 | Intermediate | `ephemeral` | `int_race_results_enriched` (results + races + pit stops + lap times, with positions gained, winner, podium, not classified, scored points, laps led), `int_pit_stops_per_driver_race`, `int_lap_times_per_driver_race`, `int_qualifying_vs_race`, `int_sprint_results_enriched`, `int_driver_season_standings`, `int_constructor_season_standings`, `int_constructor_race_results` |
-| Marts | `table` | Dimensions: `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`. Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
+| Marts — `star/` | `table` (schema `dw_star`) | The star schema: `fact_race_results` + `dim_date`, `dim_driver`, `dim_constructor`, `dim_circuit`, `dim_status` (see section 5) |
+| Marts — `analytics/` | `table` (schema `dw`) | Dimensions: `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`, `dim_date` (table `dim_calendar`, one row per day). Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
 
 Every model has a description; every mart states its **grain** (what one row represents) in a comment and in its description.
 
-**Tests** — `dbt build` runs **306 checks (models + tests), all passing**:
+**Tests** — `dbt build` runs **385 checks (models + tests), all passing**:
 
 | Layer | Tests |
 | :--- | :--- |
 | Sources | `unique` + `not_null` on every primary key, combined-key uniqueness on `lap_times` / `pit_stops` (`dbt_utils`), `accepted_values` on every closed-list column (`position_text`, `constructor_results.status`) |
 | Staging | `unique` + `not_null` on every primary key, `accepted_values` on status codes, `relationships` on all 23 foreign keys |
 | Intermediate | `relationships` to every joined entity, no duplicates after joins (`unique` on the grain key) |
-| Marts | `unique` + `not_null` on the grain key, `relationships` from facts to dimensions |
+| Marts | `unique` + `not_null` on the grain key and on every dimension key, `relationships` from each fact to `dim_date` and to each of its dimensions |
 | Custom ([`tests/`](f1_dbt/tests/)) | Same row count as staging after joins (4), pit stop and lap time totals coherent with staging (2), exactly one driver and one constructor champion per season (2) |
+
+---
+
+## 5. Star Schema
+
+![Star schema](docs/schema_etoile.png)
+
+Designed on paper with Kimball's 4 steps, validated in class, then built in dbt ([`models/marts/star/`](f1_dbt/models/marts/star/)) into its own schema `dw_star`. It reproduces the hand-built `dw` star with the same tables and columns, now generated and tested by dbt; values were checked identical to `dw`.
+
+- **Business process:** a driver's result in a Grand Prix.
+- **Grain:** one row of `fact_race_results` = one driver × one Grand Prix (`result_key`), 26,759 rows.
+- **Dimensions:** `dim_date` (one row per Grand Prix: date, year, decade, quarter, month, round, race name), `dim_driver`, `dim_constructor`, `dim_circuit`, `dim_status` (139 statuses grouped into 5 categories).
+- **Facts / measures:** `grid`, `position_order`, `positions_gained`, `points`, `laps`, `milliseconds`, `fastest_lap_speed`, `is_win`, `is_podium`, `is_dnf`, `pit_stop_count`, `total_pit_ms`.
+- **Tests:** `unique` + `not_null` on every key, `relationships` from the fact to all 5 dimensions, `accepted_values` on the 0/1 flags and status categories, fact row count = intermediate row count.
+
+**3 business questions** answered with simple queries on the star ([`star_business_questions.sql`](sql/assignments/tache_3/star_business_questions.sql)):
+
+| # | Question | Answer |
+| :--- | :--- | :--- |
+| 1 | Which constructor dominated each decade (wins)? | Ferrari (1950s), Lotus-Climax (1960s), Ferrari (1970s), McLaren (1980s), Williams (1990s), Ferrari (2000s), Mercedes (2010s), Red Bull (2020s) |
+| 2 | On which circuits is pole position most decisive (since 2000)? | Barcelona (72% of wins from pole), Yas Marina (68.8%), Marina Bay and Suzuka (66.7%) |
+| 3 | Top scorers of the hybrid era (2014–2024), and how many races lost to mechanical failure? | Hamilton 3,718.5 pts / 148 podiums / 8 mechanical DNFs, Verstappen 2,912.5 / 112 / 19, Bottas 1,784 / 67 / 18 |
 
 ---
 
@@ -170,19 +194,23 @@ YNOV-SQL-F1/
 │   │   └── dw.sql                     # Hand-built star schema ELT (public -> dw: 1 fact + 5 dims)
 │   └── assignments/
 │       ├── tache_1/                   # Window functions & CTEs (3NF and star schema)
-│       └── tache_2/                   # Scaling & indexing benchmark
+│       ├── tache_2/                   # Scaling & indexing benchmark
+│       └── tache_3/                   # 3 business questions on the star schema
 ├── f1_dbt/                            # dbt project
 │   ├── dbt_project.yml  packages.yml
 │   ├── models/
 │   │   ├── staging/                   # _sources.yml, _staging.yml, 14 stg_f1__*.sql
 │   │   ├── intermediate/              # _intermediate.yml, 8 int_*.sql
-│   │   └── marts/                     # _marts.yml, dim_*.sql, fct_*.sql
+│   │   └── marts/
+│   │       ├── star/                  # star schema -> schema dw_star (1 fact + 5 dims, same columns as dw)
+│   │       └── analytics/             # other marts -> schema dw (dim_*, fct_*, season / circuit stats)
 │   ├── tests/                         # 8 custom tests
 │   └── macros/  seeds/  snapshots/
 └── docs/
     ├── f1_without_star_schema.drawio  # 3NF ER diagram (14 tables, 23 FKs)
     ├── f1_star_schema.drawio          # Star schema diagram (1 fact, 5 dims)
     ├── Star.png  Without Star.png     # PNG exports
+    ├── schema_etoile.png              # dbt star schema (3 facts, 5 dimensions)
     ├── validation_report.md           # 6 course criteria + row parity
     └── db_choices_defense.md          # Design choices and Q&A prep
 ```

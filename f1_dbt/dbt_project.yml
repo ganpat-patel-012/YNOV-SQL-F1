@@ -20,3 +20,5 @@ models:
       +materialized: ephemeral
     marts:
       +materialized: table
+      star:
+        +schema: star      # schema dw_star : schema en etoile (1 fait + 5 dimensions, memes colonnes que dw)

@@ -1,0 +1,113 @@
+version: 2
+
+models:
+  - name: star_fact_race_results
+    description: >
+      Table de faits du schéma en étoile (schéma dw_star, table fact_race_results).
+      Grain : une ligne par pilote et par Grand Prix (= un result_id). Mêmes colonnes que dw.fact_race_results.
+    columns:
+      - name: result_key
+        description: "Identifiant du résultat (clé du grain)"
+        tests: [unique, not_null]
+      - name: date_key
+        description: "Grand Prix (race_id) -> dim_date"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('star_dim_date')
+                field: date_key
+      - name: driver_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('star_dim_driver')
+                field: driver_key
+      - name: constructor_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('star_dim_constructor')
+                field: constructor_key
+      - name: circuit_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('star_dim_circuit')
+                field: circuit_key
+      - name: status_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('star_dim_status')
+                field: status_key
+      - name: points
+        description: "Points marqués dans la course"
+        tests: [not_null]
+      - name: positions_gained
+        description: "grid − position_order (vide si départ des stands, grid = 0)"
+      - name: is_win
+        description: "1 si victoire, sinon 0"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: is_podium
+        description: "1 si podium (positions 1 à 3), sinon 0"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: is_dnf
+        description: "1 si non classé (abandon, disqualification…), sinon 0"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: pit_stop_count
+        description: "Nombre d'arrêts aux stands (0 si pas de donnée, avant 2011)"
+        tests: [not_null]
+
+  - name: star_dim_date
+    description: "Dimension date (table dim_date). Grain : une ligne par Grand Prix, date_key = race_id."
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+      - name: full_date
+        description: "Date du Grand Prix"
+        tests: [not_null]
+
+  - name: star_dim_driver
+    description: "Dimension pilote (table dim_driver). Grain : une ligne par pilote."
+    columns:
+      - name: driver_key
+        tests: [unique, not_null]
+
+  - name: star_dim_constructor
+    description: "Dimension écurie (table dim_constructor). Grain : une ligne par écurie."
+    columns:
+      - name: constructor_key
+        tests: [unique, not_null]
+
+  - name: star_dim_circuit
+    description: "Dimension circuit (table dim_circuit). Grain : une ligne par circuit."
+    columns:
+      - name: circuit_key
+        tests: [unique, not_null]
+
+  - name: star_dim_status
+    description: "Dimension statut (table dim_status). Grain : une ligne par statut, regroupé en 5 catégories."
+    columns:
+      - name: status_key
+        tests: [unique, not_null]
+      - name: category
+        description: "Famille du statut"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Finished', 'Lapped', 'Accident / Collision', 'Disqualified / DNS', 'Mechanical / Other DNF']
