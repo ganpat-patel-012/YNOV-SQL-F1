@@ -159,8 +159,8 @@ models:
                 to: ref('dim_constructors')
                 field: constructor_id
 
-  # ---------------------------------------------------------------- marts agrégés
-  - name: mart_driver_season
+  # ---------------------------------------------------------------- dimensions agrégées
+  - name: dim_driver_season
     description: >
       Une ligne par pilote et par saison : classement final officiel + stats de course
       (victoires, podiums, abandons, poles, sprints, tours en tête) + écurie(s) de la saison.
@@ -187,7 +187,7 @@ models:
       - name: is_champion
         tests: [not_null]
 
-  - name: mart_constructor_season
+  - name: dim_constructor_season
     description: >
       Une ligne par écurie et par saison (depuis 1958) : classement final officiel + victoires,
       doublés (1-2), podiums, abandons + pilotes de la saison.
@@ -208,7 +208,7 @@ models:
       - name: is_champion
         tests: [not_null]
 
-  - name: mart_teammate_head_to_head
+  - name: dim_teammate_head_to_head
     description: >
       Une ligne par saison, écurie, pilote et coéquipier : nombre de courses où le pilote
       a fini devant son coéquipier (même voiture = comparaison la plus juste entre pilotes).
@@ -237,7 +237,7 @@ models:
         description: "Pourcentage des courses communes où le pilote a fini devant son coéquipier"
         tests: [not_null]
 
-  - name: mart_circuit_stats
+  - name: dim_circuit_stats
     description: >
       Une ligne par circuit : difficulté à dépasser (positions gagnées moyennes), taux d'abandon,
       arrêts moyens (depuis 2011), taux de conversion pole → victoire (depuis 1994).
@@ -255,7 +255,7 @@ models:
       - name: pct_pole_to_win
         description: "Pourcentage de poles converties en victoire"
 
-  - name: mart_pit_stop_strategy
+  - name: dim_pit_stop_strategy
     description: >
       Une ligne par Grand Prix avec données d'arrêts (depuis 2011) : arrêts moyens, arrêts du vainqueur,
       durée médiane d'un arrêt, corrélation entre nombre d'arrêts et positions gagnées.
