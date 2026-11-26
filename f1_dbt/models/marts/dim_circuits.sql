@@ -10,6 +10,7 @@ with races_hosted as (
     group by circuit_id
 )
 select
+    {{ dbt_utils.generate_surrogate_key(['c.circuit_id']) }} as circuit_key,
     c.circuit_id,
     c.circuit_ref,
     c.circuit_name,

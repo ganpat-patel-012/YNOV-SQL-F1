@@ -2,11 +2,31 @@ version: 2
 
 models:
   # ---------------------------------------------------------------- dimensions
+  - name: dim_date
+    description: >
+      Dimension date générée avec generate_series. Grain : une ligne par jour, du 1950-01-01 au 2024-12-31,
+      ce qui couvre toutes les dates de Grand Prix.
+    columns:
+      - name: date_key
+        description: "Clé de la date au format AAAAMMJJ (ex. 20230730)"
+        tests: [unique, not_null]
+      - name: date_day
+        description: "Date du jour"
+        tests: [unique, not_null]
+      - name: decade
+        description: "Décennie (1950, 1960, …)"
+      - name: is_weekend
+        description: "Vrai le samedi et le dimanche"
+        tests: [not_null]
+
   - name: dim_drivers
     description: >
       Une ligne par pilote : identité + statistiques de carrière (GP, victoires, podiums)
       + nombre de titres de champion du monde.
     columns:
+      - name: driver_key
+        description: "Clé de substitution du pilote (dbt_utils.generate_surrogate_key)"
+        tests: [unique, not_null]
       - name: driver_id
         description: "Identifiant du pilote (clé du grain)"
         tests: [unique, not_null]
@@ -23,6 +43,9 @@ models:
     description: >
       Une ligne par écurie : identité + statistiques historiques + nombre de titres constructeurs (depuis 1958).
     columns:
+      - name: constructor_key
+        description: "Clé de substitution de l'écurie (dbt_utils.generate_surrogate_key)"
+        tests: [unique, not_null]
       - name: constructor_id
         description: "Identifiant de l'écurie (clé du grain)"
         tests: [unique, not_null]
@@ -36,6 +59,9 @@ models:
   - name: dim_circuits
     description: "Une ligne par circuit : localisation + nombre de Grands Prix organisés."
     columns:
+      - name: circuit_key
+        description: "Clé de substitution du circuit (dbt_utils.generate_surrogate_key)"
+        tests: [unique, not_null]
       - name: circuit_id
         description: "Identifiant du circuit (clé du grain)"
         tests: [unique, not_null]
@@ -45,6 +71,9 @@ models:
   - name: dim_races
     description: "Une ligne par Grand Prix : saison, manche, circuit, week-end sprint, dernière manche de la saison."
     columns:
+      - name: race_key
+        description: "Clé de substitution du Grand Prix (dbt_utils.generate_surrogate_key)"
+        tests: [unique, not_null]
       - name: race_id
         description: "Identifiant du Grand Prix (clé du grain)"
         tests: [unique, not_null]
@@ -68,6 +97,46 @@ models:
       Une ligne par résultat (un pilote dans un Grand Prix), même nombre de lignes que int_race_results_enriched.
       Ajoute le libellé du statut et la position en qualification (depuis 1994).
     columns:
+      - name: date_key
+        description: "Date du Grand Prix (AAAAMMJJ) -> dim_date"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: race_key
+        description: "Clé du Grand Prix -> dim_races"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_key
+      - name: driver_key
+        description: "Clé du pilote -> dim_drivers"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_key
+      - name: constructor_key
+        description: "Clé de l'écurie -> dim_constructors"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_key
+      - name: circuit_key
+        description: "Clé du circuit -> dim_circuits"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_key
       - name: result_id
         description: "Identifiant du résultat (clé du grain) : unique après les jointures"
         tests: [unique, not_null]
@@ -111,6 +180,46 @@ models:
   - name: fct_sprint_results
     description: "Une ligne par pilote et par course sprint (depuis 2021), avec le libellé du statut."
     columns:
+      - name: date_key
+        description: "Date du Grand Prix (AAAAMMJJ) -> dim_date"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: race_key
+        description: "Clé du Grand Prix -> dim_races"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_key
+      - name: driver_key
+        description: "Clé du pilote -> dim_drivers"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_key
+      - name: constructor_key
+        description: "Clé de l'écurie -> dim_constructors"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_key
+      - name: circuit_key
+        description: "Clé du circuit -> dim_circuits"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_key
       - name: sprint_result_id
         description: "Identifiant du résultat sprint (clé du grain)"
         tests: [unique, not_null]
@@ -141,6 +250,38 @@ models:
   - name: fct_constructor_race_results
     description: "Une ligne par écurie et par Grand Prix (depuis 1958) : points, victoires, podiums."
     columns:
+      - name: date_key
+        description: "Date du Grand Prix (AAAAMMJJ) -> dim_date"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: race_key
+        description: "Clé du Grand Prix -> dim_races"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_key
+      - name: constructor_key
+        description: "Clé de l'écurie -> dim_constructors"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_key
+      - name: circuit_key
+        description: "Clé du circuit -> dim_circuits"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_key
       - name: constructor_results_id
         description: "Identifiant du résultat écurie (clé du grain)"
         tests: [unique, not_null]
