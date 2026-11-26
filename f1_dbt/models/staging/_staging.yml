@@ -1,0 +1,309 @@
+version: 2
+
+models:
+  - name: stg_f1__seasons
+    description: "Une ligne par saison de championnat"
+    columns:
+      - name: season_year
+        description: "Année de la saison (clé)"
+        tests: [unique, not_null]
+
+  - name: stg_f1__circuits
+    description: "Une ligne par circuit, noms nettoyés et coordonnées typées"
+    columns:
+      - name: circuit_id
+        description: "Identifiant du circuit (clé)"
+        tests: [unique, not_null]
+
+  - name: stg_f1__constructors
+    description: "Une ligne par écurie"
+    columns:
+      - name: constructor_id
+        description: "Identifiant de l'écurie (clé)"
+        tests: [unique, not_null]
+
+  - name: stg_f1__drivers
+    description: "Une ligne par pilote, avec le nom complet"
+    columns:
+      - name: driver_id
+        description: "Identifiant du pilote (clé)"
+        tests: [unique, not_null]
+      - name: full_name
+        description: "Prénom + nom du pilote"
+
+  - name: stg_f1__status
+    description: "Une ligne par statut d'arrivée (Finished, +1 Lap, Accident…)"
+    columns:
+      - name: status_id
+        description: "Identifiant du statut (clé)"
+        tests: [unique, not_null]
+
+  - name: stg_f1__races
+    description: "Une ligne par Grand Prix"
+    columns:
+      - name: race_id
+        description: "Identifiant du Grand Prix (clé)"
+        tests: [unique, not_null]
+      - name: season_year
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__seasons')
+                field: season_year
+      - name: circuit_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__circuits')
+                field: circuit_id
+      - name: date_race
+        description: "Date du Grand Prix"
+
+  - name: stg_f1__results
+    description: "Une ligne par pilote et par Grand Prix"
+    columns:
+      - name: result_id
+        description: "Identifiant du résultat (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: status_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__status')
+                field: status_id
+      - name: classification_status
+        description: "Classified si classé, sinon R = abandon, D = disqualifié, E = exclu, W = forfait, F = non qualifié, N = non classé"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Classified', 'R', 'D', 'E', 'W', 'F', 'N']
+      - name: points
+        description: "Points marqués dans la course"
+
+  - name: stg_f1__sprint_results
+    description: "Une ligne par pilote et par course sprint"
+    columns:
+      - name: sprint_result_id
+        description: "Identifiant du résultat sprint (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: status_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__status')
+                field: status_id
+      - name: classification_status
+        description: "Classified si classé, sinon R = abandon, W = forfait, N = non classé"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Classified', 'R', 'W', 'N']
+
+  - name: stg_f1__qualifying
+    description: "Une ligne par pilote et par séance de qualification"
+    columns:
+      - name: qualify_id
+        description: "Identifiant de la qualification (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+
+  - name: stg_f1__lap_times
+    description: "Une ligne par pilote, par course et par tour"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [race_id, driver_id, lap_number]
+    columns:
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: lap_number
+        tests: [not_null]
+
+  - name: stg_f1__pit_stops
+    description: "Une ligne par pilote, par course et par arrêt aux stands"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [race_id, driver_id, stop_number]
+    columns:
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: stop_number
+        tests: [not_null]
+      - name: pit_milliseconds
+        description: "Durée de l'arrêt en millisecondes"
+
+  - name: stg_f1__driver_standings
+    description: "Une ligne par pilote après chaque Grand Prix (classement championnat)"
+    columns:
+      - name: driver_standings_id
+        description: "Identifiant du classement (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: standing_status
+        description: "Classified si classé, D = disqualifié du championnat"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Classified', 'D']
+
+  - name: stg_f1__constructor_standings
+    description: "Une ligne par écurie après chaque Grand Prix (classement championnat)"
+    columns:
+      - name: constructor_standings_id
+        description: "Identifiant du classement (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: standing_status
+        description: "Classified si classé, E = exclu du championnat"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Classified', 'E']
+
+  - name: stg_f1__constructor_results
+    description: "Une ligne par écurie et par Grand Prix"
+    columns:
+      - name: constructor_results_id
+        description: "Identifiant du résultat écurie (clé)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: result_status
+        description: "D = disqualifié, vide sinon"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['D']
