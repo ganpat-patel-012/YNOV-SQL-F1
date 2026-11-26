@@ -102,3 +102,235 @@ models:
       - name: pit_stop_count
         description: "Nombre d'arrêts aux stands (0 si pas de donnée, avant 2011)"
         tests: [not_null]
+      - name: laps_led
+        description: "Tours passés en tête (0 si pas de donnée, avant 1996)"
+        tests: [not_null]
+      - name: best_lap_milliseconds
+        description: "Meilleur tour du pilote, en millisecondes (depuis 1996)"
+
+  - name: int_qualifying_vs_race
+    description: >
+      Une ligne par pilote et par séance de qualification (depuis 1994), même nombre de lignes que stg_f1__qualifying.
+      Qualification jointe au résultat de course du même pilote et au Grand Prix,
+      pour comparer la position en qualification et la position à l'arrivée.
+    columns:
+      - name: qualify_id
+        description: "Identifiant de la qualification (clé du grain) : unique après les jointures"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: places_gained_vs_qualifying
+        description: "Position en qualification − position finale (positif = places gagnées en course)"
+      - name: is_pole_position
+        description: "Vrai si le pilote a réalisé la pole position"
+        tests: [not_null]
+      - name: is_pole_converted_to_win
+        description: "Vrai si le pilote parti en pole a gagné la course"
+        tests: [not_null]
+
+  - name: int_sprint_results_enriched
+    description: >
+      Une ligne par pilote et par course sprint (depuis 2021), même nombre de lignes que stg_f1__sprint_results.
+      Résultats sprint joints au Grand Prix (saison, date, circuit), enrichis des indicateurs de course.
+    columns:
+      - name: sprint_result_id
+        description: "Identifiant du résultat sprint (clé du grain) : unique après les jointures"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: status_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__status')
+                field: status_id
+      - name: circuit_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__circuits')
+                field: circuit_id
+      - name: is_winner
+        description: "Vrai si le pilote a gagné le sprint"
+        tests: [not_null]
+      - name: is_podium
+        description: "Vrai si le pilote a fini dans les 3 premiers du sprint"
+        tests: [not_null]
+
+  - name: int_driver_season_standings
+    description: >
+      Une ligne par pilote et par saison : classement final du championnat pilotes,
+      c'est-à-dire le classement après la dernière manche de la saison.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season_year, driver_id]
+    columns:
+      - name: season_year
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__seasons')
+                field: season_year
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: final_position
+        description: "Position finale au championnat pilotes"
+      - name: season_points
+        description: "Points totaux du pilote sur la saison"
+      - name: is_champion
+        description: "Vrai si le pilote est champion du monde cette saison"
+        tests: [not_null]
+
+  - name: int_constructor_season_standings
+    description: >
+      Une ligne par écurie et par saison : classement final du championnat constructeurs (depuis 1958),
+      c'est-à-dire le classement après la dernière manche de la saison.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season_year, constructor_id]
+    columns:
+      - name: season_year
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__seasons')
+                field: season_year
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: final_position
+        description: "Position finale au championnat constructeurs"
+      - name: season_points
+        description: "Points totaux de l'écurie sur la saison"
+      - name: is_champion
+        description: "Vrai si l'écurie est championne du monde cette saison"
+        tests: [not_null]
+
+  - name: int_lap_times_per_driver_race
+    description: >
+      Tours agrégés par pilote et par Grand Prix (données depuis 1996).
+      Agrégés avant la jointure pour ne pas dupliquer les résultats.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [race_id, driver_id]
+    columns:
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__drivers')
+                field: driver_id
+      - name: laps_timed
+        description: "Nombre de tours chronométrés du pilote dans la course"
+        tests: [not_null]
+      - name: laps_led
+        description: "Nombre de tours passés en tête de la course"
+        tests: [not_null]
+      - name: best_lap_milliseconds
+        description: "Meilleur tour du pilote, en millisecondes"
+      - name: avg_lap_milliseconds
+        description: "Temps moyen au tour, en millisecondes"
+
+  - name: int_constructor_race_results
+    description: >
+      Une ligne par écurie et par Grand Prix (depuis 1958), même nombre de lignes que stg_f1__constructor_results.
+      Points de l'écurie joints au Grand Prix et aux résultats de ses pilotes agrégés par course.
+    columns:
+      - name: constructor_results_id
+        description: "Identifiant du résultat écurie (clé du grain) : unique après les jointures"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__races')
+                field: race_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__constructors')
+                field: constructor_id
+      - name: circuit_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_f1__circuits')
+                field: circuit_id
+      - name: is_disqualified
+        description: "Vrai si l'écurie a été disqualifiée de la course"
+        tests: [not_null]
+      - name: drivers_entered
+        description: "Nombre de pilotes engagés par l'écurie dans la course"
+        tests: [not_null]
+      - name: wins
+        description: "Nombre de victoires de l'écurie dans la course (0 ou 1, 2 si voiture partagée)"
+        tests: [not_null]
+      - name: podiums
+        description: "Nombre de pilotes de l'écurie sur le podium"
+        tests: [not_null]

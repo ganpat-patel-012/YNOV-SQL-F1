@@ -1,5 +1,5 @@
 -- grain : une ligne par resultat (un pilote dans un Grand Prix) = une ligne de stg_f1__results
--- jointures : resultats + Grand Prix (saison, date, circuit) + arrets aux stands agreges
+-- jointures : resultats + Grand Prix (saison, date, circuit) + arrets aux stands agreges + tours agreges
 -- enrichissements : positions gagnees, victoire, podium, abandon, points marques
 select
     res.result_id,
@@ -27,10 +27,16 @@ select
     res.finish_position is null                      as is_not_classified,
     res.points > 0                                   as has_scored_points,
     coalesce(ps.pit_stop_count, 0)                   as pit_stop_count,
-    ps.total_pit_milliseconds
+    ps.total_pit_milliseconds,
+    coalesce(lt.laps_led, 0)                         as laps_led,
+    lt.best_lap_milliseconds,
+    lt.avg_lap_milliseconds
 from {{ ref('stg_f1__results') }} res
 join {{ ref('stg_f1__races') }} ra
     on ra.race_id = res.race_id
 left join {{ ref('int_pit_stops_per_driver_race') }} ps
     on ps.race_id = res.race_id
    and ps.driver_id = res.driver_id
+left join {{ ref('int_lap_times_per_driver_race') }} lt
+    on lt.race_id = res.race_id
+   and lt.driver_id = res.driver_id
