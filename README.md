@@ -7,8 +7,7 @@ End-to-end SQL & data engineering project built on the **Formula 1 World Champio
 | 1. Relational database | 14 normalized tables (3NF), 23 foreign keys, 701,433 rows, hand-built star schema | [`sql/Other SQL/`](sql/Other%20SQL/), [`dump/`](dump/), [`docs/`](docs/) |
 | 2. Tâche 1 — Advanced SQL | 6 business questions with window functions, recursive CTE, chained CTEs, on both models | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
 | 3. Tâche 2 — Performance | Data scaled ×50 (1.46 M rows), `EXPLAIN ANALYZE` before/after, 3 indexes, up to **441×** faster | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
-| 4. dbt pipeline | sources → staging → intermediate → marts, 348 passing checks, generated docs | [`f1_dbt/`](f1_dbt/) |
-| 5. Star schema | 3 fact tables sharing 5 dimensions (incl. `dim_date`), surrogate keys, 3 business questions | [`docs/schema_etoile.png`](docs/schema_etoile.png), [`sql/assignments/tache_3/`](sql/assignments/tache_3/) |
+| 4. dbt pipeline | sources → staging → intermediate → marts, 306 passing checks, generated docs | [`f1_dbt/`](f1_dbt/) |
 
 **Stack:** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Python 3.13 · Git
 **License:** CC0 Public Domain ([Kaggle / Ergast F1](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020))
@@ -99,39 +98,19 @@ sources (public.*)  ->  staging (stg_)  ->  intermediate (int_)   ->  marts (dim
 | Sources | — | [`_sources.yml`](f1_dbt/models/staging/_sources.yml) declares the 14 `public` tables as source `f1` |
 | Staging | `view` | 14 `stg_f1__<table>` models: renaming (`date` → `date_race`, `grid` → `grid_position`…), casting (points → numeric, coordinates → `numeric(9,6)`), cleaning (trim, upper), `position_text` split into a `classification_status` code. No joins, no aggregations. |
 | Intermediate | `ephemeral` | `int_race_results_enriched` (results + races + pit stops + lap times, with positions gained, winner, podium, not classified, scored points, laps led), `int_pit_stops_per_driver_race`, `int_lap_times_per_driver_race`, `int_qualifying_vs_race`, `int_sprint_results_enriched`, `int_driver_season_standings`, `int_constructor_season_standings`, `int_constructor_race_results` |
-| Marts | `table` | Dimensions: `dim_date`, `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`. Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
+| Marts | `table` | Dimensions: `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`. Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
 
 Every model has a description; every mart states its **grain** (what one row represents) in a comment and in its description.
 
-**Tests** — `dbt build` runs **348 checks (models + tests), all passing**:
+**Tests** — `dbt build` runs **306 checks (models + tests), all passing**:
 
 | Layer | Tests |
 | :--- | :--- |
 | Sources | `unique` + `not_null` on every primary key, combined-key uniqueness on `lap_times` / `pit_stops` (`dbt_utils`), `accepted_values` on every closed-list column (`position_text`, `constructor_results.status`) |
 | Staging | `unique` + `not_null` on every primary key, `accepted_values` on status codes, `relationships` on all 23 foreign keys |
 | Intermediate | `relationships` to every joined entity, no duplicates after joins (`unique` on the grain key) |
-| Marts | `unique` + `not_null` on the grain key and on every dimension key, `relationships` from each fact to `dim_date` and to each of its dimensions |
+| Marts | `unique` + `not_null` on the grain key, `relationships` from facts to dimensions |
 | Custom ([`tests/`](f1_dbt/tests/)) | Same row count as staging after joins (4), pit stop and lap time totals coherent with staging (2), exactly one driver and one constructor champion per season (2) |
-
----
-
-## 5. Star Schema
-
-![Star schema](docs/schema_etoile.png)
-
-Built in the dbt marts following Kimball's 4 steps (business process, grain, dimensions, facts):
-
-- **Facts** (grain written in each model): `fct_race_results` (one driver × one Grand Prix), `fct_sprint_results` (one driver × one sprint, from 2021), `fct_constructor_race_results` (one constructor × one Grand Prix, from 1958).
-- **Dimensions:** `dim_date` (generated with `generate_series`, one row per day 1950–2024, `date_key` = `YYYYMMDD`), `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`.
-- **Keys:** every dimension has a surrogate key (`dbt_utils.generate_surrogate_key`) next to its natural id; each fact carries `date_key`, `race_key`, `driver_key`, `constructor_key`, `circuit_key`, all tested with `relationships`.
-
-**3 business questions** answered with simple queries on the star ([`star_business_questions.sql`](sql/assignments/tache_3/star_business_questions.sql)):
-
-| # | Question | Answer |
-| :--- | :--- | :--- |
-| 1 | Which constructor dominated each decade (wins)? | Ferrari (1950s), Lotus-Climax (1960s), Ferrari (1970s), McLaren (1980s), Williams (1990s), Ferrari (2000s), Mercedes (2010s), Red Bull (2020s) |
-| 2 | On which circuits is pole position most decisive (since 2000)? | Barcelona (72% of wins from pole), Yas Marina (68.8%), Marina Bay and Suzuka (66.7%) |
-| 3 | Top scorers of the hybrid era (2014–2024), and how consistently? | Hamilton 3,718.5 pts (points in 92.5% of races), Verstappen 2,912.5, Bottas 1,784 |
 
 ---
 
@@ -191,8 +170,7 @@ YNOV-SQL-F1/
 │   │   └── dw.sql                     # Hand-built star schema ELT (public -> dw: 1 fact + 5 dims)
 │   └── assignments/
 │       ├── tache_1/                   # Window functions & CTEs (3NF and star schema)
-│       ├── tache_2/                   # Scaling & indexing benchmark
-│       └── tache_3/                   # 3 business questions on the star schema
+│       └── tache_2/                   # Scaling & indexing benchmark
 ├── f1_dbt/                            # dbt project
 │   ├── dbt_project.yml  packages.yml
 │   ├── models/
@@ -205,7 +183,6 @@ YNOV-SQL-F1/
     ├── f1_without_star_schema.drawio  # 3NF ER diagram (14 tables, 23 FKs)
     ├── f1_star_schema.drawio          # Star schema diagram (1 fact, 5 dims)
     ├── Star.png  Without Star.png     # PNG exports
-    ├── schema_etoile.png              # dbt star schema (3 facts, 5 dimensions)
     ├── validation_report.md           # 6 course criteria + row parity
     └── db_choices_defense.md          # Design choices and Q&A prep
 ```

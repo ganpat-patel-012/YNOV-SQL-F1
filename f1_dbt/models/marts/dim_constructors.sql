@@ -19,7 +19,6 @@ titles as (
     group by constructor_id
 )
 select
-    {{ dbt_utils.generate_surrogate_key(['c.constructor_id']) }} as constructor_key,
     c.constructor_id,
     c.constructor_ref,
     c.constructor_name,

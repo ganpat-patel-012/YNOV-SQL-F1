@@ -5,7 +5,6 @@ with sprint_races as (
     from {{ ref('int_sprint_results_enriched') }}
 )
 select
-    {{ dbt_utils.generate_surrogate_key(['ra.race_id']) }} as race_key,
     ra.race_id,
     ra.season_year,
     ra.round_number,

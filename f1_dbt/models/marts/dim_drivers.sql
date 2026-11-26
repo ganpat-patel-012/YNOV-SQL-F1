@@ -20,7 +20,6 @@ titles as (
     group by driver_id
 )
 select
-    {{ dbt_utils.generate_surrogate_key(['d.driver_id']) }} as driver_key,
     d.driver_id,
     d.driver_ref,
     d.driver_code,
