@@ -201,3 +201,45 @@ from decade_status
 order by
     decade desc,
     race_entries desc;
+
+-- 7. cumul des points et moyenne mobile sur 3 courses des 3 premiers pilotes de la saison 2023
+--    fenetre glissante : rows between unbounded preceding / 2 preceding and current row
+with top_drivers as (
+    select
+        f.driver_key
+    from dw.fact_race_results f
+    join dw.dim_date dt
+        on dt.date_key = f.date_key
+    where dt.year = 2023
+    group by
+        f.driver_key
+    order by
+        sum(f.points) desc
+    limit 3
+)
+select
+    d.full_name as driver_name,
+    dt.round,
+    dt.race_name,
+    f.points,
+    sum(f.points) over (
+        partition by f.driver_key
+        order by dt.round
+        rows between unbounded preceding and current row
+    ) as cumulative_points,
+    round(avg(f.points) over (
+        partition by f.driver_key
+        order by dt.round
+        rows between 2 preceding and current row
+    )::numeric, 2) as moving_avg_3_races
+from dw.fact_race_results f
+join top_drivers t
+    on t.driver_key = f.driver_key
+join dw.dim_driver d
+    on d.driver_key = f.driver_key
+join dw.dim_date dt
+    on dt.date_key = f.date_key
+where dt.year = 2023
+order by
+    driver_name,
+    dt.round;

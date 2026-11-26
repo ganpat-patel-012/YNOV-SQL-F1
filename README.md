@@ -5,12 +5,12 @@ End-to-end SQL & data engineering project built on the **Formula 1 World Champio
 | Step | What we built | Where |
 | :--- | :--- | :--- |
 | 1. Relational database | 14 normalized tables (3NF), 23 foreign keys, 701,433 rows, hand-built star schema | [`sql/Other SQL/`](sql/Other%20SQL/), [`dump/`](dump/), [`docs/`](docs/) |
-| 2. Tâche 1 — Advanced SQL | 6 business questions with window functions, recursive CTE, chained CTEs, on both models | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
-| 3. Tâche 2 — Performance | Data scaled ×50 (1.46 M rows), `EXPLAIN ANALYZE` before/after, 3 indexes, up to **441×** faster | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
+| 2. Tâche 1 — Advanced SQL | 7 business questions with ranking, LAG, NTILE, sliding windows (`ROWS BETWEEN`), recursive CTE, chained CTEs, on both models | [`sql/assignments/tache_1/`](sql/assignments/tache_1/) |
+| 3. Tâche 2 — Performance | Data scaled ×50 (1.46 M rows), `EXPLAIN ANALYZE` before/after (median of 3 runs), 4 indexes, up to **×387** faster | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
 | 4. dbt pipeline | sources → staging → intermediate → marts, 385 passing checks, generated docs | [`f1_dbt/`](f1_dbt/) |
 | 5. Star schema | dbt star in schema `dw_star`: 1 fact + 5 dimensions (same columns as the hand-built `dw`), 3 business questions | [`docs/schema_etoile.png`](docs/schema_etoile.png), [`sql/assignments/tache_3/`](sql/assignments/tache_3/) |
 
-**Stack:** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Python 3.13 · Git
+**Stack:** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Metabase · Python 3.13 · Git
 **License:** CC0 Public Domain ([Kaggle / Ergast F1](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020))
 
 ---
@@ -60,6 +60,7 @@ The same business questions are answered on the 3NF model ([`queries_non_star.sq
 | 4 | Full path of each circuit (country > city > circuit) | `WITH RECURSIVE` |
 | 5 | Average days between two consecutive races of a driver | `LAG` + `PARTITION BY` |
 | 6 | Share (%) of finish statuses per decade (star schema) | `SUM() OVER (PARTITION BY decade)` + CTEs |
+| 7 | Running total and 3-race moving average of points, top 3 drivers of 2023 | `SUM() OVER (… ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, `AVG() OVER (… ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)` |
 
 Write-ups: [6 queries explained with results](sql/assignments/tache_1/tache_1_cte_queries.md) · [Star schema design: grain, time dimension, transformations, model comparison](sql/assignments/tache_1/star_schema.md)
 
@@ -70,16 +71,17 @@ Write-ups: [6 queries explained with results](sql/assignments/tache_1/tache_1_ct
 Script: [`tache_2_indexing_benchmark.sql`](sql/assignments/tache_2/tache_2_indexing_benchmark.sql) · Report: [`benchmark_results.md`](sql/assignments/tache_2/benchmark_results.md)
 
 - **Scaling:** the star schema is copied **×50** into a separate `benchmark` schema with `CROSS JOIN generate_series(1, 50)` (`public` and `dw` untouched). Keys are shifted (`key + (copy_num - 1) * 100000`), so every PK/FK stays unique and joins have no fan-out: **1,458,650 rows** (~208 MB), 1,337,950 of them in the fact table.
-- **Indexes:** primary keys on all 6 tables, a simple B-Tree on `driver_key`, a composite B-Tree on `(constructor_key, circuit_key)`, and a partial B-Tree on `driver_key WHERE is_win = 1` (512 kB).
-- **Results** (`EXPLAIN (ANALYZE, BUFFERS)`):
+- **Indexes:** primary keys on all 6 tables, a simple B-Tree on `driver_key`, a composite B-Tree on `(constructor_key, circuit_key)`, a partial B-Tree on `driver_key WHERE is_win = 1` (512 kB), and a covering B-Tree `(constructor_key) INCLUDE (driver_key, date_key, points)` for the window-function query.
+- **Results** (`EXPLAIN (ANALYZE, BUFFERS)`, median of 3 runs, before = no index):
 
-| Query | Before (no index) | After (indexed) | Gain |
-| :--- | :--- | :--- | :---: |
-| A. one driver (`fact ⋈ driver ⋈ constructor`) | 247.31 ms · 18,814 buffers | 7.55 ms · 203 buffers | **32.7×** |
-| B. one constructor on one circuit (`fact ⋈ driver`) | 498.69 ms · 109,810 buffers | 12.64 ms · 701 buffers | **39.5×** |
-| C. wins of one driver (`fact ⋈ date ⋈ circuit`) | 279.41 ms · 20,800 buffers | 0.63 ms · 697 buffers | **441×** |
+| Query | Before | Operator before | After | Operator after | Gain |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| A. one driver (`fact ⋈ driver ⋈ constructor`) | 33.45 ms · 19,334 buffers | Seq Scan | 1.85 ms · 252 buffers | Index Scan | **×18.1** |
+| B. one constructor on one circuit (`fact ⋈ driver`) | 228.21 ms · 109,813 buffers | Seq Scan | 0.59 ms · 707 buffers | Index Scan | **×386.8** |
+| C. wins of one driver (`fact ⋈ date ⋈ circuit`) | 61.49 ms · 25,728 buffers | Seq Scan | 0.25 ms · 697 buffers | Index Scan (partial) | **×246.0** |
+| D. window function: `RANK() OVER (PARTITION BY year …)` of a constructor's drivers | 59.45 ms · 21,916 buffers | Seq Scan | 14.57 ms · 1,542 buffers | Index Only Scan (covering) | **×4.1** |
 
-Indexes replace `Parallel Seq Scan` with index scans and cut buffer reads by 96–99%; the partial index gives the largest gain for the smallest size.
+Indexes replace the full scan of the 1.34 M-row fact table and cut buffer reads by 93–99%. The partial index gives a big gain for only 512 kB. The window-function query gains less: the index removes the scan, but the join, aggregation and sort for `RANK()` remain. Full method, individual runs and limits: [`benchmark_results.md`](sql/assignments/tache_2/benchmark_results.md).
 
 ---
 
@@ -100,7 +102,7 @@ sources (public.*)  ->  staging (stg_)  ->  intermediate (int_)   ->  marts (dim
 | Staging | `view` | 14 `stg_f1__<table>` models: renaming (`date` → `date_race`, `grid` → `grid_position`…), casting (points → numeric, coordinates → `numeric(9,6)`), cleaning (trim, upper), `position_text` split into a `classification_status` code. No joins, no aggregations. |
 | Intermediate | `ephemeral` | `int_race_results_enriched` (results + races + pit stops + lap times, with positions gained, winner, podium, not classified, scored points, laps led), `int_pit_stops_per_driver_race`, `int_lap_times_per_driver_race`, `int_qualifying_vs_race`, `int_sprint_results_enriched`, `int_driver_season_standings`, `int_constructor_season_standings`, `int_constructor_race_results` |
 | Marts — `star/` | `table` (schema `dw_star`) | The star schema: `fact_race_results` + `dim_date`, `dim_driver`, `dim_constructor`, `dim_circuit`, `dim_status` (see section 5) |
-| Marts — `analytics/` | `table` (schema `dw`) | Dimensions: `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`, `dim_date` (table `dim_calendar`, one row per day). Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `dim_driver_season`, `dim_constructor_season`, `dim_circuit_stats`, `dim_pit_stop_strategy`, `dim_teammate_head_to_head` |
+| Marts — `analytics/` | `table` (schema `dw`) | Dimensions: `dim_drivers`, `dim_constructors`, `dim_circuits`, `dim_races`, `dim_date` (table `dim_calendar`, one row per day). Facts: `fct_race_results`, `fct_sprint_results`, `fct_constructor_race_results`. Aggregated tables: `fct_driver_season`, `fct_constructor_season`, `fct_circuit_stats`, `fct_pit_stop_strategy`, `fct_teammate_head_to_head` |
 
 Every model has a description; every mart states its **grain** (what one row represents) in a comment and in its description.
 
@@ -135,6 +137,10 @@ Designed on paper with Kimball's 4 steps, validated in class, then built in dbt 
 | 1 | Which constructor dominated each decade (wins)? | Ferrari (1950s), Lotus-Climax (1960s), Ferrari (1970s), McLaren (1980s), Williams (1990s), Ferrari (2000s), Mercedes (2010s), Red Bull (2020s) |
 | 2 | On which circuits is pole position most decisive (since 2000)? | Barcelona (72% of wins from pole), Yas Marina (68.8%), Marina Bay and Suzuka (66.7%) |
 | 3 | Top scorers of the hybrid era (2014–2024), and how many races lost to mechanical failure? | Hamilton 3,718.5 pts / 148 podiums / 8 mechanical DNFs, Verstappen 2,912.5 / 112 / 19, Bottas 1,784 / 67 / 18 |
+
+**Metabase dashboard** — the 3 questions on the star, connected to the `dw_star` schema (Metabase runs locally on `localhost:3000`):
+
+![Metabase dashboard](docs/metabase_dashboard.png)
 
 ---
 
@@ -210,7 +216,8 @@ YNOV-SQL-F1/
     ├── f1_without_star_schema.drawio  # 3NF ER diagram (14 tables, 23 FKs)
     ├── f1_star_schema.drawio          # Star schema diagram (1 fact, 5 dims)
     ├── Star.png  Without Star.png     # PNG exports
-    ├── schema_etoile.png              # dbt star schema (3 facts, 5 dimensions)
+    ├── schema_etoile.png              # dbt star schema (1 fact, 5 dimensions)
+    ├── metabase_dashboard.png         # Metabase dashboard on the star (3 business questions)
     ├── validation_report.md           # 6 course criteria + row parity
     └── db_choices_defense.md          # Design choices and Q&A prep
 ```

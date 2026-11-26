@@ -1,4 +1,4 @@
-# Tâche 1 — 6 Requêtes CTE & Window Functions (`dw`)
+# Tâche 1 — 7 Requêtes CTE & Window Functions (`dw`)
 
 SQL: [`queries_star.sql`](queries_star.sql) · Non-star: [`queries_non_star.sql`](queries_non_star.sql)
 
@@ -10,6 +10,7 @@ SQL: [`queries_star.sql`](queries_star.sql) · Non-star: [`queries_non_star.sql`
 | 4 | Chemin complet des circuits (`pays > ville > circuit`) | `with recursive`, `union`, `union all` |
 | 5 | Délai moyen (jours) entre 2 courses d'un pilote | `lag(full_date) over (partition by ...)`, `avg()` |
 | 6 | Part (%) des statuts d'arrivée par décennie | `sum() over (partition by decade)`, KPIs `dw` |
+| 7 | Cumul et moyenne mobile (3 courses) des points, top 3 pilotes 2023 | `sum() over (... rows between unbounded preceding and current row)`, `avg() over (... rows between 2 preceding and current row)` |
 
 ## 1. Top 3 pilotes par écurie
 ```sql
@@ -131,3 +132,30 @@ select
 from decade_status
 order by decade desc, race_entries desc;
 ```
+
+## 7. Cumul et moyenne mobile des points (top 3 pilotes 2023)
+```sql
+with top_drivers as (
+    select f.driver_key
+    from dw.fact_race_results f
+    join dw.dim_date dt on dt.date_key = f.date_key
+    where dt.year = 2023
+    group by f.driver_key
+    order by sum(f.points) desc
+    limit 3
+)
+select
+    d.full_name as driver_name, dt.round, dt.race_name, f.points,
+    sum(f.points) over (partition by f.driver_key order by dt.round
+                        rows between unbounded preceding and current row) as cumulative_points,
+    round(avg(f.points) over (partition by f.driver_key order by dt.round
+                              rows between 2 preceding and current row)::numeric, 2) as moving_avg_3_races
+from dw.fact_race_results f
+join top_drivers t on t.driver_key = f.driver_key
+join dw.dim_driver d on d.driver_key = f.driver_key
+join dw.dim_date dt on dt.date_key = f.date_key
+where dt.year = 2023
+order by driver_name, dt.round;
+```
+
+Résultat après la dernière manche (Abu Dhabi, manche 22) : Max Verstappen 530 points cumulés (moyenne mobile 25,33), Sergio Pérez 260 (13,00), Lewis Hamilton 217 (4,00). Points de Grand Prix uniquement : les points sprint ne sont pas dans `fact_race_results` (Verstappen 530 + 45 sprint = 575 au championnat).
