@@ -193,7 +193,7 @@ Useful selections: `dbt build -s staging` (one layer), `dbt run -s stg_f1__drive
 YNOV-SQL-F1/
 ├── README.md
 ├── data/csv/                          # 14 raw source CSV files (21 MB)
-├── dump/f1.dump                       # Compressed PostgreSQL dump (public + dw schemas)
+├── dump/f1.dump                       # Compressed PostgreSQL dump (public + dw + dw_star schemas)
 ├── sql/
 │   ├── Other SQL/
 │   │   ├── public.sql                 # 3NF DDL: tables, PKs, FKs, indexes
