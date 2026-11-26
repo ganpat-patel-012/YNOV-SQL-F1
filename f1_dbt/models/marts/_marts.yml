@@ -1,0 +1,274 @@
+version: 2
+
+models:
+  # ---------------------------------------------------------------- dimensions
+  - name: dim_drivers
+    description: >
+      Une ligne par pilote : identité + statistiques de carrière (GP, victoires, podiums)
+      + nombre de titres de champion du monde.
+    columns:
+      - name: driver_id
+        description: "Identifiant du pilote (clé du grain)"
+        tests: [unique, not_null]
+      - name: races
+        description: "Nombre de Grands Prix disputés (distincts : voitures partagées comptées une fois)"
+        tests: [not_null]
+      - name: wins
+        tests: [not_null]
+      - name: championships
+        description: "Nombre de titres de champion du monde pilotes"
+        tests: [not_null]
+
+  - name: dim_constructors
+    description: >
+      Une ligne par écurie : identité + statistiques historiques + nombre de titres constructeurs (depuis 1958).
+    columns:
+      - name: constructor_id
+        description: "Identifiant de l'écurie (clé du grain)"
+        tests: [unique, not_null]
+      - name: podium_finishes
+        description: "Nombre de voitures de l'écurie arrivées sur le podium (2 si deux voitures sur le podium)"
+        tests: [not_null]
+      - name: championships
+        description: "Nombre de titres de champion du monde constructeurs"
+        tests: [not_null]
+
+  - name: dim_circuits
+    description: "Une ligne par circuit : localisation + nombre de Grands Prix organisés."
+    columns:
+      - name: circuit_id
+        description: "Identifiant du circuit (clé du grain)"
+        tests: [unique, not_null]
+      - name: races_hosted
+        tests: [not_null]
+
+  - name: dim_races
+    description: "Une ligne par Grand Prix : saison, manche, circuit, week-end sprint, dernière manche de la saison."
+    columns:
+      - name: race_id
+        description: "Identifiant du Grand Prix (clé du grain)"
+        tests: [unique, not_null]
+      - name: circuit_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_id
+      - name: is_sprint_weekend
+        description: "Vrai si le week-end comporte une course sprint (depuis 2021)"
+        tests: [not_null]
+      - name: is_season_finale
+        description: "Vrai si c'est la dernière manche de la saison"
+        tests: [not_null]
+
+  # ---------------------------------------------------------------- faits
+  - name: fct_race_results
+    description: >
+      Une ligne par résultat (un pilote dans un Grand Prix), même nombre de lignes que int_race_results_enriched.
+      Ajoute le libellé du statut et la position en qualification (depuis 1994).
+    columns:
+      - name: result_id
+        description: "Identifiant du résultat (clé du grain) : unique après les jointures"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_id
+      - name: circuit_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_id
+      - name: status_label
+        description: "Libellé du statut d'arrivée (Finished, +1 Lap, Engine, Accident…)"
+        tests: [not_null]
+      - name: qualifying_position
+        description: "Position en qualification (vide avant 1994)"
+      - name: is_pole_position
+        description: "Vrai si le pilote a réalisé la pole (faux si pas de donnée de qualification)"
+        tests: [not_null]
+
+  - name: fct_sprint_results
+    description: "Une ligne par pilote et par course sprint (depuis 2021), avec le libellé du statut."
+    columns:
+      - name: sprint_result_id
+        description: "Identifiant du résultat sprint (clé du grain)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_id
+      - name: status_label
+        tests: [not_null]
+
+  - name: fct_constructor_race_results
+    description: "Une ligne par écurie et par Grand Prix (depuis 1958) : points, victoires, podiums."
+    columns:
+      - name: constructor_results_id
+        description: "Identifiant du résultat écurie (clé du grain)"
+        tests: [unique, not_null]
+      - name: race_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_id
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_id
+
+  # ---------------------------------------------------------------- marts agrégés
+  - name: mart_driver_season
+    description: >
+      Une ligne par pilote et par saison : classement final officiel + stats de course
+      (victoires, podiums, abandons, poles, sprints, tours en tête) + écurie(s) de la saison.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season_year, driver_id]
+    columns:
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_id
+      - name: season_points
+        description: "Points officiels du championnat (résultats retirés dans les années anciennes, sprints inclus)"
+      - name: constructor_names
+        description: "Écurie(s) du pilote dans la saison (plusieurs si changement en cours de saison)"
+      - name: poles
+        description: "Nombre de pole positions (vide avant 1994 : pas de donnée de qualification)"
+      - name: sprint_points
+        description: "Points marqués en sprint (vide avant 2021)"
+      - name: is_champion
+        tests: [not_null]
+
+  - name: mart_constructor_season
+    description: >
+      Une ligne par écurie et par saison (depuis 1958) : classement final officiel + victoires,
+      doublés (1-2), podiums, abandons + pilotes de la saison.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season_year, constructor_id]
+    columns:
+      - name: constructor_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_constructors')
+                field: constructor_id
+      - name: one_two_finishes
+        description: "Nombre de courses où l'écurie a pris les places 1 et 2"
+      - name: is_champion
+        tests: [not_null]
+
+  - name: mart_teammate_head_to_head
+    description: >
+      Une ligne par saison, écurie, pilote et coéquipier : nombre de courses où le pilote
+      a fini devant son coéquipier (même voiture = comparaison la plus juste entre pilotes).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season_year, constructor_id, driver_id, teammate_id]
+    columns:
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_id
+      - name: teammate_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drivers')
+                field: driver_id
+      - name: races_together
+        tests: [not_null]
+      - name: pct_races_ahead
+        description: "Pourcentage des courses communes où le pilote a fini devant son coéquipier"
+        tests: [not_null]
+
+  - name: mart_circuit_stats
+    description: >
+      Une ligne par circuit : difficulté à dépasser (positions gagnées moyennes), taux d'abandon,
+      arrêts moyens (depuis 2011), taux de conversion pole → victoire (depuis 1994).
+    columns:
+      - name: circuit_id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_circuits')
+                field: circuit_id
+      - name: avg_positions_gained
+        description: "Positions gagnées en moyenne par les pilotes classés (proche de 0 = dépassements difficiles)"
+      - name: pct_pole_to_win
+        description: "Pourcentage de poles converties en victoire"
+
+  - name: mart_pit_stop_strategy
+    description: >
+      Une ligne par Grand Prix avec données d'arrêts (depuis 2011) : arrêts moyens, arrêts du vainqueur,
+      durée médiane d'un arrêt, corrélation entre nombre d'arrêts et positions gagnées.
+    columns:
+      - name: race_id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_races')
+                field: race_id
+      - name: median_stop_milliseconds
+        description: "Durée médiane d'un arrêt (médiane : insensible aux arrêts sous drapeau rouge)"
+      - name: corr_stops_vs_positions_gained
+        description: "Corrélation entre nombre d'arrêts et positions gagnées (pilotes classés)"
