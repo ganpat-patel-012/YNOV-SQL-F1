@@ -9,6 +9,7 @@ Projet SQL et data engineering de bout en bout, construit sur le jeu de données
 | 3. Tâche 2 — Performance | Données multipliées par 50 (1,46 M de lignes), `EXPLAIN ANALYZE` avant/après (médiane de 3 exécutions), 4 index, jusqu'à **×387** plus rapide | [`sql/assignments/tache_2/`](sql/assignments/tache_2/) |
 | 4. Pipeline dbt | sources → staging → intermediate → marts, 385 vérifications réussies, documentation générée | [`f1_dbt/`](f1_dbt/) |
 | 5. Schéma en étoile | Étoile dbt dans le schéma `dw_star` : 1 table de faits + 5 dimensions (mêmes colonnes que le `dw` construit à la main), 3 questions métier | [`docs/schema_etoile.png`](docs/schema_etoile.png), [`sql/assignments/tache_3/`](sql/assignments/tache_3/) |
+| 6. Analyse critique | Limites, choix discutables et prochaines étapes | [section 6](#6-analyse-critique) |
 
 **Stack :** PostgreSQL 16 · dbt-core 1.12 + dbt-postgres · dbt_utils · Metabase · Python 3.13 · Git
 **Licence :** CC0 domaine public ([Kaggle / Ergast F1](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020))
@@ -141,6 +142,37 @@ Conçu sur papier avec les 4 étapes de Kimball, validé en cours, puis construi
 **Tableau de bord Metabase** — les 3 questions sur l'étoile, connecté au schéma `dw_star` (Metabase tourne en local sur `localhost:3000`) :
 
 ![Tableau de bord Metabase](docs/metabase_dashboard.png)
+
+---
+
+## 6. Analyse critique
+
+Ce que nous assumons, et ce que nous ferions ensuite.
+
+**Limites**
+
+| Limite | Pourquoi |
+| :--- | :--- |
+| Données figées : aucun test de fraîcheur possible | La source est un instantané, sans date de chargement ; `dbt source freshness` n'a rien à mesurer. |
+| Barème de points changé selon les époques : comparer les décennies est biaisé | Une victoire valait 8 points dans les années 1950 et 25 aujourd'hui, donc les totaux de points favorisent les pilotes récents. |
+| Voitures partagées des années 1950 : 2 résultats pour un pilote dans une course | Deux pilotes pouvaient partager une voiture : 85 cas d'un pilote avec 2 résultats dans la même course, et parfois 2 vainqueurs crédités. |
+| Fonction de fenêtrage : gain limité à ×4,1 | L'index supprime le parcours complet, mais le tri du `RANK()` reste (requête D de la tâche 2). |
+
+**Choix discutables**
+
+| Choix | Ce qu'on en pense |
+| :--- | :--- |
+| `dim_date` au grain de la course, pas du jour | Suffisant car le grain du fait est un résultat de course, mais le cours montre une dimension au jour (elle existe côté `analytics/` : `dim_calendar`). |
+| Clés naturelles plutôt que clés de substitution dans `dw_star` | Plus simple et lisible ; des clés de substitution seraient nécessaires pour historiser les dimensions (SCD2). |
+| Deux étoiles : `dw` écrite à la main, `dw_star` par dbt | `dw_star` reproduit `dw` avec dbt (valeurs vérifiées identiques) ; garder les deux montre la démarche mais fait doublon. |
+| Catégorie « Mechanical / Other DNF » approximative | Les 139 statuts sont regroupés en 5 catégories à la main ; certains statuts sont ambigus. |
+
+**Et ensuite**
+
+- Ajouter les faits qualifications, sprints et tours dans une constellation (plusieurs tables de faits partageant les mêmes dimensions).
+- Normaliser les points pour comparer les époques.
+- Ajouter des snapshots SCD2 et des tests `dbt-expectations`.
+- Lancer `dbt build` en intégration continue à chaque modification.
 
 ---
 
